@@ -3,6 +3,7 @@ import 'package:state_gen/annotations.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
+import 'package:state_gen/src/utils.dart';
 
 const sharedTypes = const {
   'bool': 'Bool',
@@ -12,12 +13,12 @@ const sharedTypes = const {
   'String': 'String',
 };
 
-bool isEnum(FieldElement field) => field.type.element.runtimeType.toString() == 'EnumElementImpl';
 final sharedChecker = TypeChecker.fromRuntime(Shared.runtimeType);
 
 class StateGenerator extends GeneratorForAnnotation<StateStore> {
   @override
-  String generateForAnnotatedElement(Element genericElement, ConstantReader annotation, BuildStep buildStep) {
+  Future<String> generateForAnnotatedElement(
+      Element genericElement, ConstantReader annotation, BuildStep buildStep) async {
     String output = '';
     final element = genericElement as ClassElement;
     final className = element.name.substring(1);
@@ -39,17 +40,36 @@ class StateGenerator extends GeneratorForAnnotation<StateStore> {
 
     if (hasSharedPrefs)
       output += "factory $className.fromSharedPrefs(SharedPreferences prefs) => $className(" +
-          element.fields.map((field) {
-            final name = field.name;
-            final type = field.type.getDisplayString();
-            if (sharedTypes.keys.contains(type)) {
-              return "$name: prefs.get${sharedTypes[type]}('$name')}";
-            } else if (isEnum(field)) {
-              return "$name: $type.values[prefs.getInt('$name')]";
-            } else {
-              return "$name: null /*UNKNOWN TYPE: $type*/";
-            }
-          }).toList(growable: false).join(',') +
+          (await Future.wait(
+            element.fields.map(
+              (field) async {
+                final name = field.name;
+                final type = field.type.getDisplayString();
+                final entities = await getEntities(field);
+
+                String sOutput = "$name: ";
+
+                if (entities.length == 3) {
+                  sOutput += "prefs.containsKey('$name') ? ";
+                }
+
+                if (sharedTypes.keys.contains(type)) {
+                  sOutput += "prefs.get${sharedTypes[type]}('$name')";
+                } else if (isEnum(field)) {
+                  sOutput += "$type.values[prefs.getInt('$name')]";
+                } else {
+                  sOutput += "null /*UNKNOWN TYPE: $type*/";
+                }
+
+                if (entities.length == 3) {
+                  sOutput += " : ${entities.last}";
+                }
+
+                return sOutput;
+              },
+            ),
+          ))
+              .join(',') +
           ");";
 
     element.fields.forEach((field) {
