@@ -1,0 +1,16 @@
+name: state_gen
+description: A new Flutter package project.
+version: 0.1.0
+author: Rodrigo Addor <rodrigotladdor@gmail.com>
+homepage: https://github.com/rodrigoaddor/state_gen
+
+environment:
+  sdk: ">=2.7.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  analyzer: ^0.39.4
+  build: ^1.2.2
+  source_gen: ^0.9.4+7
