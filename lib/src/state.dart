@@ -43,6 +43,8 @@ class StateGenerator extends GeneratorForAnnotation<StateStore> {
           (await Future.wait(
             element.fields.map(
               (field) async {
+                if (!sharedChecker.hasAnnotationOfExact(field)) return '';
+
                 final name = field.name;
                 final type = field.type.getDisplayString();
                 final entities = await getEntities(field);
