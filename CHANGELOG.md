@@ -1,3 +1,8 @@
+## 0.3.0
+
+* Basic List support
+* Simplified annotations
+
 ## 0.2.1
 
 * Fixed non-shared fields in fromSharedPrefs factory

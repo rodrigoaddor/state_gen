@@ -1,14 +1,11 @@
 class StateStore {
-  final bool hasSharedPrefs;
-
-  const StateStore(this.hasSharedPrefs);
+  const StateStore();
 }
 
-const SimpleStore = StateStore(false);
-const SharedStore = StateStore(true);
+const store = StateStore();
 
 class _SharedPreference {
   const _SharedPreference();
 }
 
-const Shared = _SharedPreference();
+const shared = _SharedPreference();

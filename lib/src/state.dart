@@ -1,9 +1,9 @@
 import 'package:state_gen/annotations.dart';
+import 'package:state_gen/src/utils.dart';
 
 import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
-import 'package:state_gen/src/utils.dart';
 
 const sharedTypes = const {
   'bool': 'Bool',
@@ -13,7 +13,7 @@ const sharedTypes = const {
   'String': 'String',
 };
 
-final sharedChecker = TypeChecker.fromRuntime(Shared.runtimeType);
+final sharedChecker = TypeChecker.fromRuntime(shared.runtimeType);
 
 class StateGenerator extends GeneratorForAnnotation<StateStore> {
   @override
@@ -22,20 +22,14 @@ class StateGenerator extends GeneratorForAnnotation<StateStore> {
     String output = '';
     final element = genericElement as ClassElement;
     final className = element.name.substring(1);
-    final hasSharedPrefs = annotation.read('hasSharedPrefs').boolValue;
+    final hasSharedPrefs = element.fields.any((field) => sharedChecker.hasAnnotationOfExact(field));
 
     output += "class $className with ChangeNotifier implements _$className {" +
-        element.fields
-            .map((field) => "${field.type.getDisplayString()} _${field.name};")
-            .toList(growable: false)
-            .join() +
+        element.fields.map((field) => "${field.type.getDisplayString()} _${field.name};").join() +
         "$className({" +
-        element.fields
-            .map((field) => "${field.type.getDisplayString()} ${field.name}")
-            .toList(growable: false)
-            .join(',') +
+        element.fields.map((field) => "${field.type.getDisplayString()} ${field.name}").join(',') +
         "}) :" +
-        element.fields.map((field) => "this._${field.name} = ${field.name}").toList(growable: false).join(',') +
+        element.fields.map((field) => "this._${field.name} = ${field.name}").join(',') +
         ";";
 
     if (hasSharedPrefs)
@@ -77,8 +71,9 @@ class StateGenerator extends GeneratorForAnnotation<StateStore> {
     element.fields.forEach((field) {
       final name = field.name;
       final type = field.type.getDisplayString();
+      final isList = field.type.isDartCoreList;
 
-      output += "$type get $name => this._$name;"
+      output += "$type get $name => ${isList ? 'UnmodifiableListView(this._$name);' : 'this._$name;'}"
           "set $name($type value) {"
           "this._$name = value;"
           "this.notifyListeners();";
