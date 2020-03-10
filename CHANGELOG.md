@@ -1,3 +1,8 @@
+## 0.3.1
+
+* Rewrote and simplified code generation
+* Fixed a double semicolon
+
 ## 0.3.0
 
 * Basic List support

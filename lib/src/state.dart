@@ -1,97 +1,56 @@
 import 'package:state_gen/annotations.dart';
+import 'package:state_gen/src/shared_prefs.dart';
 import 'package:state_gen/src/utils.dart';
 
 import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
 
-const sharedTypes = const {
-  'bool': 'Bool',
-  'double': 'Double',
-  'int': 'Int',
-  'List<String>': 'StringList',
-  'String': 'String',
-};
-
-final sharedChecker = TypeChecker.fromRuntime(shared.runtimeType);
-
 class StateGenerator extends GeneratorForAnnotation<StateStore> {
   @override
   Future<String> generateForAnnotatedElement(
       Element genericElement, ConstantReader annotation, BuildStep buildStep) async {
-    String output = '';
     final element = genericElement as ClassElement;
+    final fields = element.fields;
     final className = element.name.substring(1);
-    final hasSharedPrefs = element.fields.any((field) => sharedChecker.hasAnnotationOfExact(field));
+    final hasSharedPrefs = element.fields.any((field) => field.isShared);
 
-    output += "class $className with ChangeNotifier implements _$className {" +
-        element.fields.map((field) => "${field.type.getDisplayString()} _${field.name};").join() +
-        "$className({" +
-        element.fields.map((field) => "${field.type.getDisplayString()} ${field.name}").join(',') +
-        "}) :" +
-        element.fields.map((field) => "this._${field.name} = ${field.name}").join(',') +
-        ";";
+    final variables = fields.map((field) => "${field.type.getDisplayString()} _${field.name};").join('\n');
+    final constructorVars = fields.map((field) => "${field.type.getDisplayString()} ${field.name},").join('\n');
+    final initializers = fields.map((field) => "this._${field.name} = ${field.name}").join(',\n');
 
-    if (hasSharedPrefs)
-      output += "factory $className.fromSharedPrefs(SharedPreferences prefs) => $className(" +
-          (await Future.wait(
-            element.fields.map(
-              (field) async {
-                if (!sharedChecker.hasAnnotationOfExact(field)) return '';
+    final sharedPrefsFactory = hasSharedPrefs ? await generateSharedPrefsFactory(element) : "";
 
-                final name = field.name;
-                final type = field.type.getDisplayString();
-                final entities = await getEntities(field);
-
-                String sOutput = "$name: ";
-
-                if (entities.length == 3) {
-                  sOutput += "prefs.containsKey('$name') ? ";
-                }
-
-                if (sharedTypes.keys.contains(type)) {
-                  sOutput += "prefs.get${sharedTypes[type]}('$name')";
-                } else if (isEnum(field)) {
-                  sOutput += "$type.values[prefs.getInt('$name')]";
-                } else {
-                  sOutput += "null /*UNKNOWN TYPE: $type*/";
-                }
-
-                if (entities.length == 3) {
-                  sOutput += " : ${entities.last}";
-                }
-
-                return sOutput;
-              },
-            ),
-          ))
-              .join(',') +
-          ");";
-
-    element.fields.forEach((field) {
+    final gettersAndSetters = fields.map((field) {
       final name = field.name;
       final type = field.type.getDisplayString();
       final isList = field.type.isDartCoreList;
 
-      output += "$type get $name => ${isList ? 'UnmodifiableListView(this._$name);' : 'this._$name;'}"
-          "set $name($type value) {"
-          "this._$name = value;"
-          "this.notifyListeners();";
+      final getter = isList ? 'UnmodifiableListView(this._$name)' : "this._$name";
+      final sharedSetter = field.isShared ? generateSharedPrefsSetter(field) : "";
 
-      if (sharedChecker.hasAnnotationOfExact(field)) {
-        if (sharedTypes.keys.contains(type)) {
-          output += "SharedPreferences.getInstance().then((prefs) => prefs.set${sharedTypes[type]}('$name', value));";
-        } else if (isEnum(field)) {
-          output += "SharedPreferences.getInstance().then((prefs) => prefs.setInt('$name', value.index));";
-        } else {
-          print('Unknown type for SharedPreferences: $type (in field $name)');
+      return """
+        $type get $name => $getter;
+        set $name($type value) {
+          this._$name = value;
+          this.notifyListeners();
+          $sharedSetter
         }
+      """;
+    }).join('\n');
+
+    return """
+      class $className with ChangeNotifier implements _$className {
+        $variables
+
+        $className({
+          $constructorVars
+        })  : $initializers;
+      
+        $sharedPrefsFactory
+
+        $gettersAndSetters
       }
-
-      output += "}";
-    });
-
-    output += "}";
-    return output;
+    """;
   }
 }
